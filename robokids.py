@@ -15,7 +15,7 @@ app = Flask(__name__)
 try:
     # Utilisation correcte de Robot(left=(pin1, pin2), right=(pin3, pin4))
     # ENA et ENB ne sont pas des arguments directs de Robot, mais souvent gérés par PWM si on utilise Motor
-    robot = Robot(left=(17, 18), right=(27, 22))
+    robot = Robot(left=(17, 18, 12), right=(27, 22, 13))
     robot.stop()
     print("=" * 40)
     print("SISTEME ROBOT : OPERATIONNEL")
