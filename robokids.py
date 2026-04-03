@@ -37,45 +37,209 @@ def index():
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Robokids Control</title>
+    <title>Robokids Console</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: white; margin: 0; padding: 20px; touch-action: manipulation; }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; margin: 50px auto; }
-        button { 
-            padding: 20px; font-size: 24px; border: none; border-radius: 10px; 
-            background: #444; color: white; cursor: pointer; user-select: none;
-            transition: background 0.1s;
+        :root {
+            --rk-yellow: #FFD700;
+            --rk-dark: #121212;
+            --rk-gray: #333333;
+            --rk-white: #FFFFFF;
+            --rk-red: #E63946;
         }
-        button:active { background: #007bff; }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+            background: var(--rk-dark); 
+            color: var(--rk-white); 
+            margin: 0; 
+            padding: 20px; 
+            touch-action: manipulation;
+        }
+        
+        .container {
+            max-width: 450px;
+            margin: 0 auto;
+            background: #1e1e1e;
+            padding: 25px;
+            border-radius: 30px;
+            border: 3px solid var(--rk-yellow);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        
+        .logo-text {
+            font-size: 32px;
+            font-weight: 900;
+            color: var(--rk-yellow);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 0px #000;
+        }
+        
+        .subtitle {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 25px;
+            text-transform: uppercase;
+        }
+        
+        h2 { 
+            font-size: 14px; 
+            color: var(--rk-yellow); 
+            margin-top: 30px; 
+            margin-bottom: 15px;
+            text-align: left;
+            padding-left: 10px;
+            border-left: 4px solid var(--rk-yellow);
+            text-transform: uppercase;
+        }
+        
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 15px; 
+            margin-bottom: 20px;
+        }
+        
+        button { 
+            aspect-ratio: 1/1;
+            font-size: 28px; 
+            border: none; 
+            border-radius: 20px; 
+            background: var(--rk-gray); 
+            color: var(--rk-white); 
+            cursor: pointer; 
+            user-select: none;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 6px 0 #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        button:active { 
+            transform: translateY(4px); 
+            box-shadow: 0 2px 0 #000;
+            background: var(--rk-yellow);
+            color: var(--rk-dark);
+        }
+        
         .btn-f { grid-column: 2; }
         .btn-l { grid-column: 1; }
-        .btn-s { grid-column: 2; background: #dc3545; }
+        .btn-s { 
+            grid-column: 2; 
+            background: var(--rk-red); 
+            box-shadow: 0 6px 0 #800;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .btn-s:active { background: #ff4d5e; }
         .btn-r { grid-column: 3; }
         .btn-b { grid-column: 2; }
-        #status { margin-top: 20px; color: #888; }
+        
+        /* Mode Continu */
+        .mode-cont button { 
+            border: 2px solid var(--rk-yellow);
+            background: transparent;
+        }
+        
+        .mode-cont button.active { 
+            background: var(--rk-yellow); 
+            color: var(--rk-dark);
+            box-shadow: 0 2px 0 #b8860b; 
+            transform: translateY(4px); 
+        }
+        
+        #status { 
+            margin-top: 25px; 
+            padding: 12px; 
+            background: #000; 
+            border-radius: 12px; 
+            font-family: 'Courier New', Courier, monospace; 
+            color: var(--rk-yellow); 
+            font-size: 14px;
+            border: 1px solid #333;
+        }
+        
+        .indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: var(--rk-yellow);
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
-    <h1>Robokids Console</h1>
-    <div class="grid">
-        <button class="btn-f" onclick="send('F')">⬆️</button>
-        <button class="btn-l" onclick="send('L')">⬅️</button>
-        <button class="btn-s" onclick="send('S')">⏹️</button>
-        <button class="btn-r" onclick="send('R')">➡️</button>
-        <button class="btn-b" onclick="send('B')">⬇️</button>
+    <div class="container">
+        <div class="logo-text">ROBOKIDS</div>
+        <div class="subtitle">Robot Control System v2.0</div>
+        
+        <h2>• Mode Précision</h2>
+        <div class="grid">
+            <button class="btn-f" onclick="send('F')">▲</button>
+            <button class="btn-l" onclick="send('L')">◀</button>
+            <button class="btn-s" onclick="send('S')">STOP</button>
+            <button class="btn-r" onclick="send('R')">▶</button>
+            <button class="btn-b" onclick="send('B')">▼</button>
+        </div>
+
+        <h2>• Mode Continu</h2>
+        <div class="grid mode-cont">
+            <button class="btn-f" id="btn-CF" onclick="toggle('CF')">▲</button>
+            <button class="btn-l" id="btn-CL" onclick="toggle('CL')">◀</button>
+            <button class="btn-s" onclick="send('S')">STOP</button>
+            <button class="btn-r" id="btn-CR" onclick="toggle('CR')">▶</button>
+            <button class="btn-b" id="btn-CB" onclick="toggle('CB')">▼</button>
+        </div>
+        
+        <div id="status"><span class="indicator"></span>SYSTEM READY</div>
     </div>
-    <div id="status">Prêt</div>
 
     <script>
+        function updateStatus(msg) {
+            document.getElementById('status').innerHTML = '<span class="indicator"></span>' + msg.toUpperCase();
+        }
+
         function send(cmd) {
-            const status = document.getElementById('status');
-            status.innerText = 'Commande : ' + cmd;
+            if (cmd === 'S' || !cmd.startsWith('C')) {
+                stopAllContinuous();
+            }
+            
             fetch('/' + cmd)
                 .then(r => {
-                    if(!r.ok) status.innerText = 'Erreur';
+                    if(r.ok) updateStatus('CMD: ' + cmd);
+                    else updateStatus('SERVER ERROR');
                 })
-                .catch(e => status.innerText = 'Erreur réseau');
+                .catch(e => updateStatus('NETWORK ERROR'));
+        }
+
+        function toggle(cmd) {
+            const btn = document.getElementById('btn-' + cmd);
+            const isActive = btn.classList.contains('active');
+            
+            stopAllContinuous();
+
+            if (!isActive) {
+                btn.classList.add('active');
+                send(cmd);
+            } else {
+                send('S');
+            }
+        }
+
+        function stopAllContinuous() {
+            document.querySelectorAll('.mode-cont button').forEach(b => b.classList.remove('active'));
         }
     </script>
 </body>
@@ -95,21 +259,32 @@ def control(cmd):
         time.sleep(STEP_TIME)
         robot.stop()
 
+    elif cmd == 'CF':
+        robot.forward(speed=SPEED)
+
     elif cmd == 'B':
         robot.backward(speed=SPEED)
         time.sleep(STEP_TIME)
         robot.stop()
 
+    elif cmd == 'CB':
+        robot.backward(speed=SPEED)
+
     elif cmd == 'L':
-        # Rotation plus courte pour plus de précision dans les virages
         robot.left(speed=SPEED)
         time.sleep(0.05)
         robot.stop()
+
+    elif cmd == 'CL':
+        robot.left(speed=SPEED)
 
     elif cmd == 'R':
         robot.right(speed=SPEED)
         time.sleep(0.05)
         robot.stop()
+
+    elif cmd == 'CR':
+        robot.right(speed=SPEED)
 
     elif cmd == 'S':
         robot.stop()
