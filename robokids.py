@@ -13,7 +13,9 @@ app = Flask(__name__)
 # Configuration : left=(IN1, IN2, ENA), right=(IN3, IN4, ENB)
 # Pins BCM : IN1=17, IN2=18, ENA=12 | IN3=27, IN4=22, ENB=13
 try:
-    robot = Robot(left=(17, 18, 12), right=(27, 22, 13))
+    # Utilisation correcte de Robot(left=(pin1, pin2), right=(pin3, pin4))
+    # ENA et ENB ne sont pas des arguments directs de Robot, mais souvent gérés par PWM si on utilise Motor
+    robot = Robot(left=(17, 18), right=(27, 22))
     robot.stop()
     print("=" * 40)
     print("SISTEME ROBOT : OPERATIONNEL")
@@ -31,7 +33,54 @@ SPEED = 0.8  # Vitesse (0.0 à 1.0). 0.8 est un bon compromis puissance/contrôl
 
 @app.route('/')
 def index():
-    return "<h1>Robot Robokids Ready!</h1><p>Utilisez /F, /B, /L, /R ou /S</p>"
+    return """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Robokids Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #222; color: white; margin: 0; padding: 20px; touch-action: manipulation; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; margin: 50px auto; }
+        button { 
+            padding: 20px; font-size: 24px; border: none; border-radius: 10px; 
+            background: #444; color: white; cursor: pointer; user-select: none;
+            transition: background 0.1s;
+        }
+        button:active { background: #007bff; }
+        .btn-f { grid-column: 2; }
+        .btn-l { grid-column: 1; }
+        .btn-s { grid-column: 2; background: #dc3545; }
+        .btn-r { grid-column: 3; }
+        .btn-b { grid-column: 2; }
+        #status { margin-top: 20px; color: #888; }
+    </style>
+</head>
+<body>
+    <h1>Robokids Console</h1>
+    <div class="grid">
+        <button class="btn-f" onclick="send('F')">⬆️</button>
+        <button class="btn-l" onclick="send('L')">⬅️</button>
+        <button class="btn-s" onclick="send('S')">⏹️</button>
+        <button class="btn-r" onclick="send('R')">➡️</button>
+        <button class="btn-b" onclick="send('B')">⬇️</button>
+    </div>
+    <div id="status">Prêt</div>
+
+    <script>
+        function send(cmd) {
+            const status = document.getElementById('status');
+            status.innerText = 'Commande : ' + cmd;
+            fetch('/' + cmd)
+                .then(r => {
+                    if(!r.ok) status.innerText = 'Erreur';
+                })
+                .catch(e => status.innerText = 'Erreur réseau');
+        }
+    </script>
+</body>
+</html>
+"""
 
 
 @app.route('/<cmd>')
