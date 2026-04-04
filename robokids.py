@@ -1,4 +1,5 @@
-from flask import Flask
+from flask import Flask, send_file, request
+import os
 from gpiozero import Robot
 import logging
 import time
@@ -68,6 +69,11 @@ def index():
             box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
         
+        .logo-img {
+            max-width: 120px;
+            margin-bottom: 10px;
+        }
+        
         .logo-text {
             font-size: 32px;
             font-weight: 900;
@@ -81,15 +87,15 @@ def index():
         .subtitle {
             font-size: 12px;
             color: #888;
-            margin-bottom: 25px;
+            margin-bottom: 5px;
             text-transform: uppercase;
         }
         
         h2 { 
             font-size: 14px; 
             color: var(--rk-yellow); 
-            margin-top: 30px; 
-            margin-bottom: 15px;
+            margin-top: 10px; 
+            margin-bottom: 10px;
             text-align: left;
             padding-left: 10px;
             border-left: 4px solid var(--rk-yellow);
@@ -152,6 +158,102 @@ def index():
             transform: translateY(4px); 
         }
         
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+            justify-content: center;
+        }
+        
+        .radio-item {
+            flex: 1 1 40%;
+            min-width: 120px;
+        }
+        
+        .radio-item input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .radio-item label {
+            display: block;
+            background: var(--rk-gray);
+            color: var(--rk-white);
+            padding: 12px 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 800;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            position: relative;
+            z-index: 5; /* Augmenté pour être au-dessus de tout */
+        }
+        
+        .radio-item input:checked + label {
+            border: 2px solid var(--rk-yellow) !important;
+            color: var(--rk-yellow);
+            background: rgba(255, 215, 0, 0.1);
+        }
+        
+        /* Mode Switch Styling */
+        .mode-switcher {
+            display: flex;
+            background: var(--rk-gray);
+            border-radius: 15px;
+            margin: 5px 0;
+            padding: 5px;
+            position: relative;
+            border: 1px solid #444;
+        }
+        
+        .mode-option {
+            flex: 1;
+            padding: 10px;
+            cursor: pointer;
+            z-index: 1;
+            font-weight: 900;
+            font-size: 14px;
+            transition: color 0.3s;
+            text-transform: uppercase;
+        }
+        
+        .mode-option.active {
+            color: var(--rk-dark);
+        }
+        
+        .mode-slider {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: calc(50% - 5px);
+            height: calc(100% - 100%); /* Hidden by default or handled by JS */
+            height: 38px;
+            background: var(--rk-yellow);
+            border-radius: 10px;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .mode-slider.right {
+            transform: translateX(100%);
+        }
+
+        #precision-settings {
+            transition: opacity 0.3s, max-height 0.3s;
+            overflow: hidden;
+        }
+        
+        .hidden {
+            opacity: 0;
+            max-height: 0;
+            margin: 0;
+            padding: 0;
+            pointer-events: none;
+        }
+        
         #status { 
             margin-top: 25px; 
             padding: 12px; 
@@ -182,41 +284,104 @@ def index():
 </head>
 <body>
     <div class="container">
+        <img src="/logo" class="logo-img" alt="Robokids Logo">
         <div class="logo-text">ROBOKIDS</div>
         <div class="subtitle">Robot Control System v2.0</div>
         
-        <h2>• Mode Précision</h2>
-        <div class="grid">
-            <button class="btn-f" onclick="send('F')">▲</button>
-            <button class="btn-l" onclick="send('L')">◀</button>
-            <button class="btn-s" onclick="send('S')">STOP</button>
-            <button class="btn-r" onclick="send('R')">▶</button>
-            <button class="btn-b" onclick="send('B')">▼</button>
+        <div class="mode-switcher" onclick="toggleMainMode()">
+            <div id="slider" class="mode-slider"></div>
+            <div id="opt-step" class="mode-option active">Précision</div>
+            <div id="opt-cont" class="mode-option">Continu</div>
         </div>
 
-        <h2>• Mode Continu</h2>
-        <div class="grid mode-cont">
-            <button class="btn-f" id="btn-CF" onclick="toggle('CF')">▲</button>
-            <button class="btn-l" id="btn-CL" onclick="toggle('CL')">◀</button>
+        <div id="precision-settings">
+            <h2>• Distance / Durée</h2>
+            <div class="radio-group">
+                <div class="radio-item">
+                    <input type="radio" id="s1" name="step" value="0.05">
+                    <label for="s1">TRÈS COURT (0.05s)</label>
+                </div>
+                <div class="radio-item">
+                    <input type="radio" id="s2" name="step" value="0.1" checked>
+                    <label for="s2">NORMAL (0.1s)</label>
+                </div>
+                <div class="radio-item">
+                    <input type="radio" id="s3" name="step" value="0.2">
+                    <label for="s3">LONG (0.2s)</label>
+                </div>
+                <div class="radio-item">
+                    <input type="radio" id="s4" name="step" value="0.5">
+                    <label for="s4">TRÈS LONG (0.5s)</label>
+                </div>
+            </div>
+        </div>
+
+        <h2>• Contrôles</h2>
+        <div class="grid">
+            <button class="btn-f" id="btn-F" onclick="handleMove('F')">▲</button>
+            <button class="btn-l" id="btn-L" onclick="handleMove('L')">◀</button>
             <button class="btn-s" onclick="send('S')">STOP</button>
-            <button class="btn-r" id="btn-CR" onclick="toggle('CR')">▶</button>
-            <button class="btn-b" id="btn-CB" onclick="toggle('CB')">▼</button>
+            <button class="btn-r" id="btn-R" onclick="handleMove('R')">▶</button>
+            <button class="btn-b" id="btn-B" onclick="handleMove('B')">▼</button>
         </div>
         
         <div id="status"><span class="indicator"></span>SYSTEM READY</div>
     </div>
 
     <script>
+        let isContinuousMode = false;
+        let activeContinuousBtn = null;
+
+        function toggleMainMode() {
+            isContinuousMode = !isContinuousMode;
+            
+            // UI Update
+            document.getElementById('slider').classList.toggle('right');
+            document.getElementById('opt-step').classList.toggle('active');
+            document.getElementById('opt-cont').classList.toggle('active');
+            document.getElementById('precision-settings').classList.toggle('hidden');
+            
+            // Reset state
+            send('S');
+        }
+
+        function handleMove(direction) {
+            if (isContinuousMode) {
+                const cmd = 'C' + direction;
+                const btn = document.getElementById('btn-' + direction);
+                
+                if (activeContinuousBtn === btn) {
+                    // Si on reclique sur le même bouton en mode continu, on l'arrête
+                    send('S');
+                } else {
+                    // Sinon on lance le mouvement continu
+                    stopVisualContinuous();
+                    btn.classList.add('active');
+                    activeContinuousBtn = btn;
+                    send(cmd);
+                }
+            } else {
+                // Mode Précision normal
+                send(direction);
+            }
+        }
+
         function updateStatus(msg) {
             document.getElementById('status').innerHTML = '<span class="indicator"></span>' + msg.toUpperCase();
         }
 
         function send(cmd) {
-            if (cmd === 'S' || !cmd.startsWith('C')) {
-                stopAllContinuous();
+            if (cmd === 'S') {
+                stopVisualContinuous();
             }
             
-            fetch('/' + cmd)
+            let url = '/' + cmd;
+            if (!cmd.startsWith('C') && cmd !== 'S') {
+                const step = document.querySelector('input[name="step"]:checked').value;
+                url += '?duration=' + step;
+            }
+
+            fetch(url)
                 .then(r => {
                     if(r.ok) updateStatus('CMD: ' + cmd);
                     else updateStatus('SERVER ERROR');
@@ -224,22 +389,9 @@ def index():
                 .catch(e => updateStatus('NETWORK ERROR'));
         }
 
-        function toggle(cmd) {
-            const btn = document.getElementById('btn-' + cmd);
-            const isActive = btn.classList.contains('active');
-            
-            stopAllContinuous();
-
-            if (!isActive) {
-                btn.classList.add('active');
-                send(cmd);
-            } else {
-                send('S');
-            }
-        }
-
-        function stopAllContinuous() {
-            document.querySelectorAll('.mode-cont button').forEach(b => b.classList.remove('active'));
+        function stopVisualContinuous() {
+            document.querySelectorAll('.grid button').forEach(b => b.classList.remove('active'));
+            activeContinuousBtn = null;
         }
     </script>
 </body>
@@ -247,16 +399,26 @@ def index():
 """
 
 
+@app.route('/logo')
+def get_logo():
+    logo_path = "/home/mahjoub/Documents/local/robokids_b_v1/robokids.jpg"
+    if os.path.exists(logo_path):
+        return send_file(logo_path, mimetype='image/jpeg')
+    return "", 404
+
+
 @app.route('/<cmd>')
 def control(cmd):
     if robot is None:
         return "Erreur Matérielle", 500
 
-    print(f"Commande reçue : {cmd}")
+    duration = request.args.get('duration', default=STEP_TIME, type=float)
+
+    print(f"Commande reçue : {cmd} (durée: {duration})")
 
     if cmd == 'F':
         robot.forward(speed=SPEED)
-        time.sleep(STEP_TIME)
+        time.sleep(duration)
         robot.stop()
 
     elif cmd == 'CF':
@@ -264,7 +426,7 @@ def control(cmd):
 
     elif cmd == 'B':
         robot.backward(speed=SPEED)
-        time.sleep(STEP_TIME)
+        time.sleep(duration)
         robot.stop()
 
     elif cmd == 'CB':
@@ -272,7 +434,7 @@ def control(cmd):
 
     elif cmd == 'L':
         robot.left(speed=SPEED)
-        time.sleep(0.05)
+        time.sleep(min(duration, 0.2))  # On limite la rotation pour la sécurité
         robot.stop()
 
     elif cmd == 'CL':
@@ -280,7 +442,7 @@ def control(cmd):
 
     elif cmd == 'R':
         robot.right(speed=SPEED)
-        time.sleep(0.05)
+        time.sleep(min(duration, 0.2))
         robot.stop()
 
     elif cmd == 'CR':
