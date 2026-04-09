@@ -538,26 +538,20 @@ def control(cmd):
         robot.backward(speed=SPEED)
 
     elif cmd == 'L':
-        # FORCER la rotation sur soi-même à gauche (gauche recule, droite avance)
-        robot.left_motor.backward(speed=SPEED)
-        robot.right_motor.forward(speed=SPEED)
+        robot.left(speed=SPEED)
         time.sleep(duration)
         robot.stop()
 
     elif cmd == 'CL':
-        robot.left_motor.backward(speed=SPEED)
-        robot.right_motor.forward(speed=SPEED)
+        robot.left(speed=SPEED)
 
     elif cmd == 'R':
-        # FORCER la rotation sur soi-même à droite (gauche avance, droite recule)
-        robot.left_motor.forward(speed=SPEED)
-        robot.right_motor.backward(speed=SPEED)
+        robot.right(speed=SPEED)
         time.sleep(duration)
         robot.stop()
 
     elif cmd == 'CR':
-        robot.left_motor.forward(speed=SPEED)
-        robot.right_motor.backward(speed=SPEED)
+        robot.right(speed=SPEED)
 
     elif cmd == 'S':
         robot.stop()
