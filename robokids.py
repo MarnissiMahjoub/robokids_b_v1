@@ -185,18 +185,23 @@ def index():
             color: var(--rk-dark);
         }
         
-        .btn-f { grid-column: 2; }
-        .btn-l { grid-column: 1; }
+        .btn-fl { grid-column: 1; grid-row: 1; font-size: 22px; background: #2a2a2a; }
+        .btn-f  { grid-column: 2; grid-row: 1; }
+        .btn-fr { grid-column: 3; grid-row: 1; font-size: 22px; background: #2a2a2a; }
+        
+        .btn-l { grid-column: 1; grid-row: 2; }
         .btn-s { 
-            grid-column: 2; 
+            grid-column: 2;
+            grid-row: 2;
             background: var(--rk-red); 
             box-shadow: 0 6px 0 #800;
             font-weight: bold;
             font-size: 16px;
         }
         .btn-s:active { background: #ff4d5e; }
-        .btn-r { grid-column: 3; }
-        .btn-b { grid-column: 2; }
+        .btn-r { grid-column: 3; grid-row: 2; }
+        
+        .btn-b { grid-column: 2; grid-row: 3; }
         
         /* Mode Continu */
         .mode-cont button { 
@@ -396,10 +401,14 @@ def index():
 
         <h2>• Contrôles</h2>
         <div class="grid">
+            <button class="btn-fl" id="btn-FL" onclick="handleMove('FL')">↖</button>
             <button class="btn-f" id="btn-F" onclick="handleMove('F')">▲</button>
+            <button class="btn-fr" id="btn-FR" onclick="handleMove('FR')">↗</button>
+            
             <button class="btn-l" id="btn-L" onclick="handleMove('L')">◀</button>
             <button class="btn-s" onclick="send('S')">STOP</button>
             <button class="btn-r" id="btn-R" onclick="handleMove('R')">▶</button>
+            
             <button class="btn-b" id="btn-B" onclick="handleMove('B')">▼</button>
         </div>
         
@@ -528,6 +537,24 @@ def control(cmd):
 
     elif cmd == 'CF':
         robot.forward(speed=SPEED)
+
+    elif cmd == 'FL':
+        # Dévier à gauche en avançant (roue droite plus rapide)
+        robot.value = (SPEED * 0.3, SPEED)
+        time.sleep(duration)
+        robot.stop()
+
+    elif cmd == 'CFL':
+        robot.value = (SPEED * 0.3, SPEED)
+
+    elif cmd == 'FR':
+        # Dévier à droite en avançant (roue gauche plus rapide)
+        robot.value = (SPEED, SPEED * 0.3)
+        time.sleep(duration)
+        robot.stop()
+
+    elif cmd == 'CFR':
+        robot.value = (SPEED, SPEED * 0.3)
 
     elif cmd == 'B':
         robot.backward(speed=SPEED)
