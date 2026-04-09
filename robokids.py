@@ -1,8 +1,9 @@
 from flask import Flask, send_file, request
 import os
-from gpiozero import Robot
+from gpiozero import Robot, OutputDevice, DigitalInputDevice
 import logging
 import time
+import threading
 
 # --- CONFIGURATION LOGS ---
 log = logging.getLogger('werkzeug')
@@ -15,17 +16,69 @@ app = Flask(__name__)
 # Pins BCM : IN1=17, IN2=18, ENA=12 | IN3=27, IN4=22, ENB=13
 try:
     # Utilisation correcte de Robot(left=(pin1, pin2), right=(pin3, pin4))
-    # ENA et ENB ne sont pas des arguments directs de Robot, mais souvent gérés par PWM si on utilise Motor
-    robot = Robot(left=(17, 18, 12), right=(27, 22, 13))
+    # ENA (gpio 12) et ENB (gpio 13) allumées pour autoriser les moteurs
+    ena = OutputDevice(12)
+    enb = OutputDevice(13)
+    ena.on()
+    enb.on()
+    
+    robot = Robot(left=(17, 18), right=(27, 22))
     robot.stop()
     print("=" * 40)
     print("SISTEME ROBOT : OPERATIONNEL")
     print("Mode : Step-by-Step (Sécurisé)")
-    print("Vitesse : PWM sur GPIO 12 & 13")
+    print("Vitesse : ENA/ENB activés (HIGH), PWM sur IN1/IN2")
     print("=" * 40)
 except Exception as e:
     robot = None
     print(f"!!! ERREUR INITIALISATION : {e}")
+
+# --- INITIALISATION DES CAPTEURS ULTRASONS ---
+try:
+    echo_pin = DigitalInputDevice(14)
+    # Mappage par défaut (à inverser si besoin) : Gauche=26, Centre=19, Droite=21
+    trig_pins = {
+        'left': OutputDevice(26),
+        'center': OutputDevice(19),
+        'right': OutputDevice(21)
+    }
+    ultrasonic_lock = threading.Lock()
+    has_sensors = True
+    print("Capteurs Ultrasons : MULTIPLEXÉS (Echo=14)")
+except Exception as e:
+    has_sensors = False
+    print(f"!!! ERREUR ULTRASONS : {e}")
+
+def read_distance(trig):
+    """Lis la distance via un trig spécifique en partageant l'echo."""
+    if not has_sensors or echo_pin is None:
+        return -1
+    
+    # On utilise un verrou pour interroger un seul capteur à la fois
+    with ultrasonic_lock:
+        trig.on()
+        time.sleep(0.00001)
+        trig.off()
+        
+        t0 = time.time()
+        t1 = time.time()
+        timeout = t0 + 0.05  # Timeout 50ms (~8 mètres max)
+        
+        # Attente du début de l'écho (HIGH)
+        while echo_pin.value == 0:
+            t0 = time.time()
+            if t0 > timeout:
+                return -1
+                
+        # Attente de la fin de l'écho (LOW)
+        timeout = t0 + 0.05
+        while echo_pin.value == 1:
+            t1 = time.time()
+            if t1 > timeout:
+                return -1
+                
+        # Calcul de la distance en cm
+        return (t1 - t0) * 17150
 
 # --- REGLAGES ---
 STEP_TIME = 0.1  # Temps d'activation en secondes (100ms)
@@ -254,6 +307,25 @@ def index():
             pointer-events: none;
         }
         
+        #sensors {
+            margin: 15px 0;
+            background: #111;
+            padding: 12px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-around;
+            border: 1px solid #333;
+            font-size: 13px;
+            font-weight: bold;
+            color: var(--rk-yellow);
+        }
+        
+        .sensor-val {
+            color: var(--rk-white);
+            font-family: monospace;
+            font-size: 15px;
+        }
+
         #status { 
             margin-top: 25px; 
             padding: 12px; 
@@ -292,6 +364,12 @@ def index():
             <div id="slider" class="mode-slider"></div>
             <div id="opt-step" class="mode-option active">Précision</div>
             <div id="opt-cont" class="mode-option">Continu</div>
+        </div>
+
+        <div id="sensors">
+            <div>◀ L: <span id="dist-l" class="sensor-val">--</span>cm</div>
+            <div>▲ C: <span id="dist-c" class="sensor-val">--</span>cm</div>
+            <div>▶ R: <span id="dist-r" class="sensor-val">--</span>cm</div>
         </div>
 
         <div id="precision-settings">
@@ -340,6 +418,7 @@ def index():
             document.getElementById('opt-step').classList.toggle('active');
             document.getElementById('opt-cont').classList.toggle('active');
             document.getElementById('precision-settings').classList.toggle('hidden');
+            document.querySelector('.grid').classList.toggle('mode-cont');
             
             // Reset state
             send('S');
@@ -393,11 +472,37 @@ def index():
             document.querySelectorAll('.grid button').forEach(b => b.classList.remove('active'));
             activeContinuousBtn = null;
         }
+
+        // Boucle de mise à jour des ultrasons
+        setInterval(() => {
+            fetch('/sensors')
+                .then(r => r.json())
+                .then(data => {
+                    const formatDist = val => val < 0 ? "ERR" : val.toFixed(1);
+                    document.getElementById('dist-l').innerText = formatDist(data.left);
+                    document.getElementById('dist-c').innerText = formatDist(data.center);
+                    document.getElementById('dist-r').innerText = formatDist(data.right);
+                    
+                    // Alerte de proximité (visuel)
+                    document.getElementById('dist-c').style.color = (data.center > 0 && data.center < 15) ? 'var(--rk-red)' : 'var(--rk-white)';
+                })
+                .catch(e => console.log("Sensors unreach"));
+        }, 1000); // Mise à jour toutes les secondes pour éviter de surcharger le réseau
     </script>
 </body>
 </html>
 """
 
+@app.route('/sensors')
+def get_sensors():
+    if not has_sensors:
+        return {"left": -1, "center": -1, "right": -1}
+    # On lit le capteur gauche, puis centre, puis droite (séquentiellement à cause du partage d'echo)
+    return {
+        "left": read_distance(trig_pins['left']),
+        "center": read_distance(trig_pins['center']),
+        "right": read_distance(trig_pins['right'])
+    }
 
 @app.route('/logo')
 def get_logo():
@@ -433,20 +538,26 @@ def control(cmd):
         robot.backward(speed=SPEED)
 
     elif cmd == 'L':
-        robot.left(speed=SPEED)
-        time.sleep(min(duration, 0.2))  # On limite la rotation pour la sécurité
+        # FORCER la rotation sur soi-même à gauche (gauche recule, droite avance)
+        robot.left_motor.backward(speed=SPEED)
+        robot.right_motor.forward(speed=SPEED)
+        time.sleep(duration)
         robot.stop()
 
     elif cmd == 'CL':
-        robot.left(speed=SPEED)
+        robot.left_motor.backward(speed=SPEED)
+        robot.right_motor.forward(speed=SPEED)
 
     elif cmd == 'R':
-        robot.right(speed=SPEED)
-        time.sleep(min(duration, 0.2))
+        # FORCER la rotation sur soi-même à droite (gauche avance, droite recule)
+        robot.left_motor.forward(speed=SPEED)
+        robot.right_motor.backward(speed=SPEED)
+        time.sleep(duration)
         robot.stop()
 
     elif cmd == 'CR':
-        robot.right(speed=SPEED)
+        robot.left_motor.forward(speed=SPEED)
+        robot.right_motor.backward(speed=SPEED)
 
     elif cmd == 'S':
         robot.stop()
