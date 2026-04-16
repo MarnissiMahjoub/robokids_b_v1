@@ -3,6 +3,7 @@ import os
 from gpiozero import Robot, OutputDevice, DigitalInputDevice
 import logging
 import time
+import threading
 
 # --- CONFIGURATION LOGS ---
 log = logging.getLogger('werkzeug')
@@ -11,7 +12,7 @@ log.setLevel(logging.ERROR)
 app = Flask(__name__)
 
 print("\n" + "=" * 50)
-print("DEMARRAGE DU SERVICE ROBOKIDS")
+print("DEMARRAGE DU SERVICE ROBOKIDS - SECURITÉ 20CM")
 print("=" * 50)
 
 # --- INITIALISATION DU ROBOT ---
@@ -23,27 +24,28 @@ try:
 
     robot = Robot(left=(17, 18), right=(27, 22))
     robot.stop()
-    print("[OK] Moteurs configurés (Pins: 17, 18, 27, 22 + EN: 12, 13)")
+    print("[OK] Moteurs configurés")
 except Exception as e:
     robot = None
     print(f"[ERREUR MOTORS] : {e}")
 
-# --- INITIALISATION DES CAPTEURS ---
+# --- INITIALISATION DES CAPTEURS (L et R INVERSÉS ICI) ---
 try:
     sensors = {
-        'left': {'trig': OutputDevice(10), 'echo': DigitalInputDevice(25)},
+        # Inversion demandée : Right devient Left et inversement
+        'left': {'trig': OutputDevice(11), 'echo': DigitalInputDevice(7)},
         'center': {'trig': OutputDevice(9), 'echo': DigitalInputDevice(8)},
-        'right': {'trig': OutputDevice(11), 'echo': DigitalInputDevice(7)}
+        'right': {'trig': OutputDevice(10), 'echo': DigitalInputDevice(25)}
     }
     has_sensors = True
-    print("[OK] Capteurs Ultrasons configurés (Trig: 10,9,11 | Echo: 25,8,7)")
+    print("[OK] Capteurs configurés et L/R inversés")
 except Exception as e:
     has_sensors = False
     print(f"[ERREUR SENSORS] : {e}")
 
 
 def read_distance(sensor_key):
-    """Lit la distance avec logs détaillés en cas d'échec."""
+    """Lecture brute d'un capteur."""
     if not has_sensors:
         return -1
 
@@ -51,32 +53,52 @@ def read_distance(sensor_key):
     trig = s['trig']
     echo = s['echo']
 
-    # Impulsion
     trig.on()
     time.sleep(0.00001)
     trig.off()
 
     t0 = time.time()
     t1 = time.time()
-    timeout = t0 + 0.05
+    timeout = t0 + 0.04  # Timeout court pour la réactivité
 
-    # Attente signal HIGH
     while echo.value == 0:
         t0 = time.time()
-        if t0 > timeout:
-            print(f"  [!] TIMEOUT BAS : Capteur {sensor_key} ne répond pas.")
-            return -1
+        if t0 > timeout: return -1
 
-    # Attente retour LOW
-    timeout = t0 + 0.05
+    timeout = t0 + 0.04
     while echo.value == 1:
         t1 = time.time()
-        if t1 > timeout:
-            print(f"  [!] TIMEOUT HAUT : Capteur {sensor_key} reste bloqué.")
-            return -1
+        if t1 > timeout: return -1
 
     return round((t1 - t0) * 17150, 1)
 
+
+# --- BOUCLE DE SURVEILLANCE ANTI-COLLISION ---
+def security_thread():
+    """Vérifie les obstacles en arrière-plan sans attendre l'interface web."""
+    while True:
+        if has_sensors and robot:
+            d_l = read_distance('left')
+            d_c = read_distance('center')
+            d_r = read_distance('right')
+
+            # Affichage des logs en continu dans le terminal
+            print(f"DISTANCES >> L:{d_l} | C:{d_c} | R:{d_r}", flush=True)
+
+            # Si un obstacle est détecté à moins de 20cm (et distance valide > 0)
+            if (0 < d_l < 20) or (0 < d_c < 20) or (0 < d_r < 20):
+                # Si le robot n'est pas déjà arrêté
+                if robot.value != (0, 0):
+                    robot.stop()
+                    print("!!! ALERTE 20CM : ARRET AUTOMATIQUE !!!", flush=True)
+
+        time.sleep(0.1)  # Fréquence de 10Hz (très réactif)
+
+
+# Lancement du thread de sécurité
+if has_sensors:
+    monitor = threading.Thread(target=security_thread, daemon=True)
+    monitor.start()
 
 # --- REGLAGES ---
 STEP_TIME = 0.1
@@ -148,7 +170,7 @@ def index():
                     const step = document.querySelector('input[name="step"]:checked').value;
                     url += '?duration=' + step;
                 }
-                fetch(url).then(() => document.getElementById('status').innerText = "CMD: " + cmd);
+                fetch(url);
             }
             setInterval(() => {
                 fetch('/sensors').then(r => r.json()).then(data => {
@@ -165,19 +187,12 @@ def index():
 
 @app.route('/sensors')
 def get_sensors():
-    if not has_sensors:
-        return {"left": -1, "center": -1, "right": -1}
-
-    dists = {
+    # Cette route sert maintenant surtout à l'affichage web
+    return {
         "left": read_distance('left'),
         "center": read_distance('center'),
         "right": read_distance('right')
     }
-
-    # LOG TERMINAL : Affiche les distances en boucle
-    print(f"SENSORS >> L:{dists['left']} | C:{dists['center']} | R:{dists['right']}")
-
-    return dists
 
 
 @app.route('/<cmd>')
@@ -185,7 +200,11 @@ def control(cmd):
     if robot is None: return "Hardware Error", 500
     duration = request.args.get('duration', default=STEP_TIME, type=float)
 
-    print(f"ACTION >> Commande: {cmd} | Durée: {duration}s")
+    # Sécurité supplémentaire : si on demande d'avancer mais qu'il y a un obstacle
+    if cmd in ['F', 'CF', 'FL', 'FR', 'CFL', 'CFR']:
+        if 0 < read_distance('center') < 20:
+            print("COMMANDE REFUSÉE : OBSTACLE TROP PROCHE")
+            return "Obstacle", 403
 
     if cmd == 'F':
         robot.forward(speed=SPEED);
@@ -225,7 +244,6 @@ def control(cmd):
         robot.right(speed=SPEED)
     elif cmd == 'S':
         robot.stop()
-        print("ACTION >> Robot STOP")
 
     return "OK", 200
 
@@ -237,6 +255,4 @@ def get_logo():
 
 
 if __name__ == '__main__':
-    # Log de l'IP du serveur
-    print("SERVEUR >> Lancé sur le port 5000")
     app.run(host='0.0.0.0', port=5000)
