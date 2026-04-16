@@ -22,21 +22,21 @@ try:
     robot.stop()
     print("=" * 40)
     print("SYSTEME ROBOT : OPERATIONNEL")
+    print("Mappage : Trig(10,9,11) | Echo(25,8,7)")
     print("=" * 40)
 except Exception as e:
     robot = None
     print(f"!!! ERREUR INITIALISATION : {e}")
 
-# --- INITIALISATION DES CAPTEURS ULTRASONS (3 ECHO SEPARES) ---
+# --- INITIALISATION DES CAPTEURS ULTRASONS (NOUVEAUX PINS) ---
 try:
-    # Mappage des pins Echo individuels : 14, 15, 18
     sensors = {
-        'left': {'trig': OutputDevice(26), 'echo': DigitalInputDevice(14)},
-        'center': {'trig': OutputDevice(19), 'echo': DigitalInputDevice(15)},
-        'right': {'trig': OutputDevice(21), 'echo': DigitalInputDevice(18)}
+        'left': {'trig': OutputDevice(10), 'echo': DigitalInputDevice(25)},
+        'center': {'trig': OutputDevice(9), 'echo': DigitalInputDevice(8)},
+        'right': {'trig': OutputDevice(11), 'echo': DigitalInputDevice(7)}
     }
     has_sensors = True
-    print("Capteurs Ultrasons : INDEPENDANTS (Echo 14, 15, 18)")
+    print("Capteurs Ultrasons : CONFIGURÉS")
 except Exception as e:
     has_sensors = False
     print(f"!!! ERREUR ULTRASONS : {e}")
@@ -83,7 +83,6 @@ SPEED = 0.8
 
 @app.route('/')
 def index():
-    # Ton code HTML original (simplifié ici pour la lecture mais garde le tien)
     return """
     <!DOCTYPE html>
     <html>
@@ -105,21 +104,17 @@ def index():
     <body>
         <div class="container">
             <div style="font-size: 32px; font-weight: 900; color: var(--rk-yellow);">ROBOKIDS</div>
-
             <div class="mode-switcher" onclick="toggleMainMode()" id="mode-label">MODE: PRECISION</div>
-
             <div id="sensors">
                 <div>L: <span id="dist-l">--</span>cm</div>
                 <div>C: <span id="dist-c">--</span>cm</div>
                 <div>R: <span id="dist-r">--</span>cm</div>
             </div>
-
             <div id="precision-settings">
                 <input type="radio" id="s1" name="step" value="0.05"> 0.05s
                 <input type="radio" id="s2" name="step" value="0.1" checked> 0.1s
                 <input type="radio" id="s3" name="step" value="0.2"> 0.2s
             </div>
-
             <div class="grid">
                 <button onclick="handleMove('FL')">↖</button>
                 <button onclick="handleMove('F')">▲</button>
@@ -133,7 +128,6 @@ def index():
             </div>
             <div id="status">READY</div>
         </div>
-
         <script>
             let isContinuousMode = false;
             function toggleMainMode() {
@@ -142,12 +136,10 @@ def index():
                 document.getElementById('precision-settings').classList.toggle('hidden');
                 send('S');
             }
-
             function handleMove(dir) {
                 if (isContinuousMode) { send('C' + dir); }
                 else { send(dir); }
             }
-
             function send(cmd) {
                 let url = '/' + cmd;
                 if (!cmd.startsWith('C') && cmd !== 'S') {
@@ -156,7 +148,6 @@ def index():
                 }
                 fetch(url).then(() => document.getElementById('status').innerText = "CMD: " + cmd);
             }
-
             setInterval(() => {
                 fetch('/sensors').then(r => r.json()).then(data => {
                     document.getElementById('dist-l').innerText = data.left;
