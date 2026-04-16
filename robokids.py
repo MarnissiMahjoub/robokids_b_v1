@@ -28,7 +28,7 @@ except Exception as e:
     robot = None
     print(f"!!! ERREUR INITIALISATION : {e}")
 
-# --- INITIALISATION DES CAPTEURS ULTRASONS (NOUVEAUX PINS) ---
+# --- INITIALISATION DES CAPTEURS ULTRASONS ---
 try:
     sensors = {
         'left': {'trig': OutputDevice(10), 'echo': DigitalInputDevice(25)},
@@ -43,7 +43,7 @@ except Exception as e:
 
 
 def read_distance(sensor_key):
-    """Lit la distance pour un capteur spécifique."""
+    """Lit la distance pour un capteur spécifique avec debug console."""
     if not has_sensors:
         return -1
 
@@ -63,7 +63,10 @@ def read_distance(sensor_key):
     # Attente du signal HIGH
     while echo.value == 0:
         t0 = time.time()
-        if t0 > timeout: return -1
+        if t0 > timeout:
+            # Log si le capteur ne répond pas
+            print(f"DEBUG: Capteur [{sensor_key}] ne répond pas (TIMEOUT)")
+            return -1
 
     # Attente du retour au signal LOW
     timeout = t0 + 0.05
@@ -165,11 +168,18 @@ def index():
 def get_sensors():
     if not has_sensors:
         return {"left": -1, "center": -1, "right": -1}
-    return {
+
+    # Lecture des 3 capteurs
+    dists = {
         "left": read_distance('left'),
         "center": read_distance('center'),
         "right": read_distance('right')
     }
+
+    # --- LOG TERMINAL ---
+    print(f"ULTRASONS >> G:{dists['left']}cm | C:{dists['center']}cm | D:{dists['right']}cm")
+
+    return dists
 
 
 @app.route('/<cmd>')
