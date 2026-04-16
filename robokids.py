@@ -3,13 +3,16 @@ import os
 from gpiozero import Robot, OutputDevice, DigitalInputDevice
 import logging
 import time
-import threading
 
 # --- CONFIGURATION LOGS ---
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 app = Flask(__name__)
+
+print("\n" + "=" * 50)
+print("DEMARRAGE DU SERVICE ROBOKIDS")
+print("=" * 50)
 
 # --- INITIALISATION DU ROBOT ---
 try:
@@ -20,15 +23,12 @@ try:
 
     robot = Robot(left=(17, 18), right=(27, 22))
     robot.stop()
-    print("=" * 40)
-    print("SYSTEME ROBOT : OPERATIONNEL")
-    print("Mappage : Trig(10,9,11) | Echo(25,8,7)")
-    print("=" * 40)
+    print("[OK] Moteurs configurés (Pins: 17, 18, 27, 22 + EN: 12, 13)")
 except Exception as e:
     robot = None
-    print(f"!!! ERREUR INITIALISATION : {e}")
+    print(f"[ERREUR MOTORS] : {e}")
 
-# --- INITIALISATION DES CAPTEURS ULTRASONS ---
+# --- INITIALISATION DES CAPTEURS ---
 try:
     sensors = {
         'left': {'trig': OutputDevice(10), 'echo': DigitalInputDevice(25)},
@@ -36,14 +36,14 @@ try:
         'right': {'trig': OutputDevice(11), 'echo': DigitalInputDevice(7)}
     }
     has_sensors = True
-    print("Capteurs Ultrasons : CONFIGURÉS")
+    print("[OK] Capteurs Ultrasons configurés (Trig: 10,9,11 | Echo: 25,8,7)")
 except Exception as e:
     has_sensors = False
-    print(f"!!! ERREUR ULTRASONS : {e}")
+    print(f"[ERREUR SENSORS] : {e}")
 
 
 def read_distance(sensor_key):
-    """Lit la distance pour un capteur spécifique avec debug console."""
+    """Lit la distance avec logs détaillés en cas d'échec."""
     if not has_sensors:
         return -1
 
@@ -51,7 +51,7 @@ def read_distance(sensor_key):
     trig = s['trig']
     echo = s['echo']
 
-    # Envoi de l'impulsion
+    # Impulsion
     trig.on()
     time.sleep(0.00001)
     trig.off()
@@ -60,23 +60,22 @@ def read_distance(sensor_key):
     t1 = time.time()
     timeout = t0 + 0.05
 
-    # Attente du signal HIGH
+    # Attente signal HIGH
     while echo.value == 0:
         t0 = time.time()
         if t0 > timeout:
-            # Log si le capteur ne répond pas
-            print(f"DEBUG: Capteur [{sensor_key}] ne répond pas (TIMEOUT)")
+            print(f"  [!] TIMEOUT BAS : Capteur {sensor_key} ne répond pas.")
             return -1
 
-    # Attente du retour au signal LOW
+    # Attente retour LOW
     timeout = t0 + 0.05
     while echo.value == 1:
         t1 = time.time()
-        if t1 > timeout: return -1
+        if t1 > timeout:
+            print(f"  [!] TIMEOUT HAUT : Capteur {sensor_key} reste bloqué.")
+            return -1
 
-    # Calcul distance
-    distance = (t1 - t0) * 17150
-    return round(distance, 1)
+    return round((t1 - t0) * 17150, 1)
 
 
 # --- REGLAGES ---
@@ -169,15 +168,14 @@ def get_sensors():
     if not has_sensors:
         return {"left": -1, "center": -1, "right": -1}
 
-    # Lecture des 3 capteurs
     dists = {
         "left": read_distance('left'),
         "center": read_distance('center'),
         "right": read_distance('right')
     }
 
-    # --- LOG TERMINAL ---
-    print(f"ULTRASONS >> G:{dists['left']}cm | C:{dists['center']}cm | D:{dists['right']}cm")
+    # LOG TERMINAL : Affiche les distances en boucle
+    print(f"SENSORS >> L:{dists['left']} | C:{dists['center']} | R:{dists['right']}")
 
     return dists
 
@@ -186,6 +184,8 @@ def get_sensors():
 def control(cmd):
     if robot is None: return "Hardware Error", 500
     duration = request.args.get('duration', default=STEP_TIME, type=float)
+
+    print(f"ACTION >> Commande: {cmd} | Durée: {duration}s")
 
     if cmd == 'F':
         robot.forward(speed=SPEED);
@@ -225,6 +225,7 @@ def control(cmd):
         robot.right(speed=SPEED)
     elif cmd == 'S':
         robot.stop()
+        print("ACTION >> Robot STOP")
 
     return "OK", 200
 
@@ -236,4 +237,6 @@ def get_logo():
 
 
 if __name__ == '__main__':
+    # Log de l'IP du serveur
+    print("SERVEUR >> Lancé sur le port 5000")
     app.run(host='0.0.0.0', port=5000)
