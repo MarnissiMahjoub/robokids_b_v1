@@ -15,19 +15,8 @@ app = Flask(__name__)
 security_enabled = True
 
 print("\n" + "=" * 50)
-print("DEMARRAGE DU SERVICE ROBOKIDS - SÉCURITÉ MODULABLE")
+print("DEMARRAGE DU SERVICE ROBOKIDS - MODE HOTSPOT")
 print("=" * 50)
-
-
-# --- FONCTION WIFI ---
-def connect_to_wifi(ssid, password):
-    print(f"[WIFI] Tentative de connexion à : {ssid}...", flush=True)
-    status = os.system(f'sudo nmcli dev wifi connect "{ssid}" password "{password}"')
-    if status == 0:
-        print(f"[WIFI] Connecté avec succès à {ssid}", flush=True)
-    else:
-        print(f"[WIFI] Échec ou réseau non trouvé.", flush=True)
-
 
 # --- INITIALISATION DU ROBOT ---
 try:
@@ -56,13 +45,13 @@ except Exception as e:
     print(f"[ERREUR SENSORS] : {e}")
 
 
-# --- MODIFICATION DE LA FONCTION DE LECTURE ---
+# --- FONCTION DE LECTURE ---
 def read_distance(sensor_key):
     if not has_sensors: return -1
     s = sensors[sensor_key]
     trig, echo = s['trig'], s['echo']
 
-    # Envoi du signal
+    # Envoi du signal ultrason
     trig.on()
     time.sleep(0.00001)
     trig.off()
@@ -70,7 +59,7 @@ def read_distance(sensor_key):
     t0 = t1 = time.time()
     timeout = t0 + 0.04
 
-    # Attente du retour
+    # Attente de l'écho
     while echo.value == 0:
         t0 = time.time()
         if t0 > timeout: return -1
@@ -82,11 +71,11 @@ def read_distance(sensor_key):
 
     dist = round((t1 - t0) * 17150, 1)
 
-    # --- TEST PRINT AJOUTÉ ICI ---
-    if dist > 0 and dist < 100:  # On affiche seulement si l'objet est à moins d'un mètre
-        print(f"[SENSOR] {sensor_key.upper()}: {dist} cm")
+    # --- LOGS DES CAPTEURS ---
+    if 0 < dist < 100:  # On n'affiche que si l'objet est à moins de 1 mètre
+        print(f"[SENSOR] {sensor_key.upper()}: {dist} cm", flush=True)
         if dist < 20:
-            print(f"  --> ATTENTION : Obstacle proche sur {sensor_key} !")
+            print(f"  --> ATTENTION : Obstacle sur {sensor_key} !", flush=True)
 
     return dist
 
@@ -94,10 +83,12 @@ def read_distance(sensor_key):
 # --- SURVEILLANCE ANTI-COLLISION ---
 def security_thread():
     global security_enabled
+    print("[OK] Thread de sécurité actif", flush=True)
     while True:
         if has_sensors and robot and security_enabled:
-            d_l = read_distance('left')
+            # On lit le capteur central en priorité pour l'arrêt d'urgence
             d_c = read_distance('center')
+            d_l = read_distance('left')
             d_r = read_distance('right')
 
             if (0 < d_l < 20) or (0 < d_c < 20) or (0 < d_r < 20):
@@ -124,8 +115,6 @@ def index():
             :root { --rk-yellow: #FFD700; --rk-dark: #121212; --rk-gray: #333333; --rk-white: #FFFFFF; --rk-red: #E63946; --rk-green: #2ecc71; }
             body { font-family: sans-serif; text-align: center; background: var(--rk-dark); color: var(--rk-white); padding: 15px; }
             .container { max-width: 450px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 30px; border: 3px solid var(--rk-yellow); }
-
-            /* UI Switch */
             .ui-row { background: #222; padding: 10px; border-radius: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
             .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
             .switch input { opacity: 0; width: 0; height: 0; }
@@ -133,7 +122,6 @@ def index():
             .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
             input:checked + .slider { background-color: var(--rk-green); }
             input:checked + .slider:before { transform: translateX(22px); }
-
             .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
             button { aspect-ratio: 1/1; font-size: 24px; border-radius: 15px; background: var(--rk-gray); color: white; border: none; box-shadow: 0 4px 0 #000; }
             button:active { background: var(--rk-yellow); color: black; transform: translateY(2px); box-shadow: 0 2px 0 #000; }
@@ -143,7 +131,6 @@ def index():
     <body>
         <div class="container">
             <div style="font-size: 28px; font-weight: 900; color: var(--rk-yellow); margin-bottom:10px;">ROBOKIDS</div>
-
             <div class="ui-row">
                 <span>SÉCURITÉ ULTRASON</span>
                 <label class="switch">
@@ -151,13 +138,11 @@ def index():
                     <span class="slider"></span>
                 </label>
             </div>
-
             <div id="sensors">
                 <div>L: <span id="dist-l">--</span>cm</div>
                 <div>C: <span id="dist-c">--</span>cm</div>
                 <div>R: <span id="dist-r">--</span>cm</div>
             </div>
-
             <div class="grid">
                 <button onclick="send('FL')">↖</button><button onclick="send('F')">▲</button><button onclick="send('FR')">↗</button>
                 <button onclick="send('L')">◀</button><button style="background:var(--rk-red)" onclick="send('S')">STP</button><button onclick="send('R')">▶</button>
@@ -199,7 +184,6 @@ def get_sensors():
 def control(cmd):
     if robot is None: return "Error", 500
 
-    # Bloquer l'ordre AVANT de l'exécuter si sécurité ON
     if security_enabled and cmd in ['F', 'FL', 'FR']:
         if 0 < read_distance('center') < 20:
             return "Obstacle", 403
@@ -223,7 +207,6 @@ def control(cmd):
     elif cmd == 'S':
         robot.stop()
 
-    # Arrêt après un court délai pour les commandes simples
     if cmd in ['F', 'B', 'L', 'R', 'FL', 'FR', 'BL', 'BR']:
         time.sleep(STEP_TIME)
         robot.stop()
@@ -231,10 +214,8 @@ def control(cmd):
 
 
 if __name__ == '__main__':
-    # Wi-Fi : Remplace par ton vrai SSID et MDP
-    threading.Thread(target=connect_to_wifi, args=("mahjoub", "12345678"), daemon=True).start()
-
     if has_sensors:
         threading.Thread(target=security_thread, daemon=True).start()
 
+    # Lancement du serveur sur le port 5000
     app.run(host='0.0.0.0', port=5000)
