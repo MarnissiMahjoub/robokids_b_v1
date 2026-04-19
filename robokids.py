@@ -56,23 +56,39 @@ except Exception as e:
     print(f"[ERREUR SENSORS] : {e}")
 
 
+# --- MODIFICATION DE LA FONCTION DE LECTURE ---
 def read_distance(sensor_key):
     if not has_sensors: return -1
     s = sensors[sensor_key]
     trig, echo = s['trig'], s['echo']
+
+    # Envoi du signal
     trig.on()
     time.sleep(0.00001)
     trig.off()
+
     t0 = t1 = time.time()
     timeout = t0 + 0.04
+
+    # Attente du retour
     while echo.value == 0:
         t0 = time.time()
         if t0 > timeout: return -1
+
     timeout = t0 + 0.04
     while echo.value == 1:
         t1 = time.time()
         if t1 > timeout: return -1
-    return round((t1 - t0) * 17150, 1)
+
+    dist = round((t1 - t0) * 17150, 1)
+
+    # --- TEST PRINT AJOUTÉ ICI ---
+    if dist > 0 and dist < 100:  # On affiche seulement si l'objet est à moins d'un mètre
+        print(f"[SENSOR] {sensor_key.upper()}: {dist} cm")
+        if dist < 20:
+            print(f"  --> ATTENTION : Obstacle proche sur {sensor_key} !")
+
+    return dist
 
 
 # --- SURVEILLANCE ANTI-COLLISION ---
