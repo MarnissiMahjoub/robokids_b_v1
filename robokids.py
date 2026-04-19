@@ -132,7 +132,7 @@ def index():
         <div class="container">
             <div style="font-size: 28px; font-weight: 900; color: var(--rk-yellow); margin-bottom:10px;">ROBOKIDS</div>
             <div class="ui-row">
-                <span>SÉCURITÉ ULTRASON</span>
+                <span>SÉCURITÉ aa</span>
                 <label class="switch">
                     <input type="checkbox" id="sec-toggle" checked onchange="toggleSec()">
                     <span class="slider"></span>
