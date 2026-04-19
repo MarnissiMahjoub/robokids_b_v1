@@ -47,11 +47,13 @@ except Exception as e:
 
 # --- FONCTION DE LECTURE ---
 def read_distance(sensor_key):
-    if not has_sensors: return -1
+    if not has_sensors:
+        print(f"!!! ERREUR : Capteur {sensor_key} non initialisé", flush=True)
+        return -1
+
     s = sensors[sensor_key]
     trig, echo = s['trig'], s['echo']
 
-    # Envoi du signal ultrason
     trig.on()
     time.sleep(0.00001)
     trig.off()
@@ -59,10 +61,11 @@ def read_distance(sensor_key):
     t0 = t1 = time.time()
     timeout = t0 + 0.04
 
-    # Attente de l'écho
     while echo.value == 0:
         t0 = time.time()
-        if t0 > timeout: return -1
+        if t0 > timeout:
+            # print(f"DEBUG: {sensor_key} timeout (pas de signal)", flush=True)
+            return -1
 
     timeout = t0 + 0.04
     while echo.value == 1:
@@ -71,11 +74,8 @@ def read_distance(sensor_key):
 
     dist = round((t1 - t0) * 17150, 1)
 
-    # --- LOGS DES CAPTEURS ---
-    if 0 < dist < 100:  # On n'affiche que si l'objet est à moins de 1 mètre
-        print(f"[SENSOR] {sensor_key.upper()}: {dist} cm", flush=True)
-        if dist < 20:
-            print(f"  --> ATTENTION : Obstacle sur {sensor_key} !", flush=True)
+    # --- ON FORCE LE PRINT POUR TOUTES LES DISTANCES ---
+    print(f"LECTURE {sensor_key.upper()} : {dist} cm", flush=True)
 
     return dist
 
