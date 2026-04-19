@@ -6,8 +6,9 @@ import time
 import threading
 
 # --- CONFIGURATION LOGS ---
+# On remet le log en INFO pour voir les requêtes HTTP (les "OK")
 log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
+log.setLevel(logging.INFO)
 
 app = Flask(__name__)
 
@@ -15,40 +16,41 @@ app = Flask(__name__)
 security_enabled = True
 
 print("\n" + "=" * 50)
-print("DEMARRAGE DU SERVICE ROBOKIDS - MODE HOTSPOT")
-print("=" * 50)
+print("DEMARRAGE DU SERVICE ROBOKIDS - MODE DEBUG TOTAL")
+print("=" * 50, flush=True)
 
 # --- INITIALISATION DU ROBOT ---
 try:
+    print("[INIT] Configuration des moteurs...", end=" ", flush=True)
     ena = OutputDevice(12)
     enb = OutputDevice(13)
     ena.on()
     enb.on()
     robot = Robot(left=(17, 18), right=(27, 22))
     robot.stop()
-    print("[OK] Moteurs configurés")
+    print("OK", flush=True)
 except Exception as e:
     robot = None
-    print(f"[ERREUR MOTORS] : {e}")
+    print(f"\n[ERREUR MOTORS] : {e}", flush=True)
 
 # --- INITIALISATION DES CAPTEURS ---
 try:
+    print("[INIT] Configuration des capteurs...", end=" ", flush=True)
     sensors = {
         'left': {'trig': OutputDevice(11), 'echo': DigitalInputDevice(7)},
         'center': {'trig': OutputDevice(9), 'echo': DigitalInputDevice(8)},
         'right': {'trig': OutputDevice(10), 'echo': DigitalInputDevice(25)}
     }
     has_sensors = True
-    print("[OK] Capteurs configurés")
+    print("OK", flush=True)
 except Exception as e:
     has_sensors = False
-    print(f"[ERREUR SENSORS] : {e}")
+    print(f"\n[ERREUR SENSORS] : {e}", flush=True)
 
 
 # --- FONCTION DE LECTURE ---
 def read_distance(sensor_key):
     if not has_sensors:
-        print(f"!!! ERREUR : Capteur {sensor_key} non initialisé", flush=True)
         return -1
 
     s = sensors[sensor_key]
@@ -63,9 +65,7 @@ def read_distance(sensor_key):
 
     while echo.value == 0:
         t0 = time.time()
-        if t0 > timeout:
-            # print(f"DEBUG: {sensor_key} timeout (pas de signal)", flush=True)
-            return -1
+        if t0 > timeout: return -1
 
     timeout = t0 + 0.04
     while echo.value == 1:
@@ -74,8 +74,8 @@ def read_distance(sensor_key):
 
     dist = round((t1 - t0) * 17150, 1)
 
-    # --- ON FORCE LE PRINT POUR TOUTES LES DISTANCES ---
-    print(f"LECTURE {sensor_key.upper()} : {dist} cm", flush=True)
+    # LOG DE LECTURE (très utile pour voir si un capteur est mort)
+    # print(f"[CAPTEUR] {sensor_key.upper()}: {dist} cm", flush=True)
 
     return dist
 
@@ -83,18 +83,20 @@ def read_distance(sensor_key):
 # --- SURVEILLANCE ANTI-COLLISION ---
 def security_thread():
     global security_enabled
-    print("[OK] Thread de sécurité actif", flush=True)
+    print("[THREAD] Surveillance anti-collision ACTIVÉE", flush=True)
     while True:
         if has_sensors and robot and security_enabled:
-            # On lit le capteur central en priorité pour l'arrêt d'urgence
             d_c = read_distance('center')
             d_l = read_distance('left')
             d_r = read_distance('right')
 
+            # Log discret pour vérifier que le thread tourne
+            # print(f"Distances: L={d_l} C={d_c} R={d_r}", flush=True)
+
             if (0 < d_l < 20) or (0 < d_c < 20) or (0 < d_r < 20):
                 if robot.value != (0, 0):
                     robot.stop()
-                    print("!!! ARRET AUTOMATIQUE (OBJET DÉTECTÉ) !!!", flush=True)
+                    print(f"!!! SÉCURITÉ !!! Obstacle détecté (L:{d_l}, C:{d_c}, R:{d_r}) - ARRET", flush=True)
         time.sleep(0.1)
 
 
@@ -105,6 +107,7 @@ SPEED = 0.8
 
 @app.route('/')
 def index():
+    print("[HTTP] Accès à la page d'accueil", flush=True)
     return """
     <!DOCTYPE html>
     <html>
@@ -132,7 +135,7 @@ def index():
         <div class="container">
             <div style="font-size: 28px; font-weight: 900; color: var(--rk-yellow); margin-bottom:10px;">ROBOKIDS</div>
             <div class="ui-row">
-                <span>SÉCURITÉ aa</span>
+                <span>SÉCURITÉ ULTRASON</span>
                 <label class="switch">
                     <input type="checkbox" id="sec-toggle" checked onchange="toggleSec()">
                     <span class="slider"></span>
@@ -171,21 +174,30 @@ def index():
 @app.route('/toggle_security')
 def toggle_security():
     global security_enabled
-    security_enabled = (request.args.get('status') == 'on')
+    status = request.args.get('status')
+    security_enabled = (status == 'on')
+    print(f"[ACTION] Sécurité changée via UI : {security_enabled}", flush=True)
     return "OK"
 
 
 @app.route('/sensors')
 def get_sensors():
+    # On ne logue pas ici pour éviter de polluer le terminal toutes les 800ms
     return jsonify({"left": read_distance('left'), "center": read_distance('center'), "right": read_distance('right')})
 
 
 @app.route('/<cmd>')
 def control(cmd):
-    if robot is None: return "Error", 500
+    if robot is None:
+        print("[ERREUR] Commande reçue mais robot non initialisé", flush=True)
+        return "Error", 500
+
+    print(f"[MOTEUR] Commande reçue : {cmd}", flush=True)
 
     if security_enabled and cmd in ['F', 'FL', 'FR']:
-        if 0 < read_distance('center') < 20:
+        dist_c = read_distance('center')
+        if 0 < dist_c < 20:
+            print(f"[BLOQUÉ] Marche avant refusée : Obstacle à {dist_c}cm", flush=True)
             return "Obstacle", 403
 
     if cmd == 'F':
@@ -206,16 +218,20 @@ def control(cmd):
         robot.value = (-1, -0.3)
     elif cmd == 'S':
         robot.stop()
+        print("[MOTEUR] Stop manuel", flush=True)
 
     if cmd in ['F', 'B', 'L', 'R', 'FL', 'FR', 'BL', 'BR']:
         time.sleep(STEP_TIME)
         robot.stop()
+
     return "OK"
 
 
 if __name__ == '__main__':
     if has_sensors:
-        threading.Thread(target=security_thread, daemon=True).start()
+        print("[SYSTEME] Démarrage du thread de sécurité...", flush=True)
+        t = threading.Thread(target=security_thread, daemon=True)
+        t.start()
 
-    # Lancement du serveur sur le port 5000
-    app.run(host='0.0.0.0', port=5000)
+    print(f"[SYSTEME] Lancement de Flask sur le port 5000...", flush=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
